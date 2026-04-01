@@ -1,0 +1,473 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────────────────────────
+// MODULE VENTES & CRM
+// ─────────────────────────────────────────────
+
+model Customer {
+  id        String         @id @default(cuid())
+  name      String
+  email     String?
+  phone     String?
+  address   String?
+  company   String?
+  taxNumber String?
+  status    CustomerStatus @default(ACTIVE)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+  invoices  Invoice[]
+  orders    Order[]
+  quotes    Quote[]
+
+  @@map("customers")
+}
+
+model Quote {
+  id         String      @id @default(cuid())
+  number     String      @unique
+  customerId String
+  customer   Customer    @relation(fields: [customerId], references: [id])
+  status     QuoteStatus @default(DRAFT)
+  validUntil DateTime
+  notes      String?
+  items      QuoteItem[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@map("quotes")
+}
+
+model QuoteItem {
+  id          String  @id @default(cuid())
+  quoteId     String
+  quote       Quote   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  productId   String?
+  description String
+  quantity    Float
+  unitPrice   Float
+
+  @@map("quote_items")
+}
+
+model Order {
+  id           String      @id @default(cuid())
+  number       String      @unique
+  customerId   String
+  customer     Customer    @relation(fields: [customerId], references: [id])
+  status       OrderStatus @default(PENDING)
+  deliveryDate DateTime?
+  notes        String?
+  items        OrderItem[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+
+  @@map("orders")
+}
+
+model OrderItem {
+  id        String  @id @default(cuid())
+  orderId   String
+  order     Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId String
+  product   Product @relation(fields: [productId], references: [id])
+  quantity  Float
+  unitPrice Float
+
+  @@map("order_items")
+}
+
+// ─────────────────────────────────────────────
+// MODULE FINANCE & COMPTABILITÉ
+// ─────────────────────────────────────────────
+
+model Invoice {
+  id         String        @id @default(cuid())
+  number     String        @unique
+  customerId String
+  customer   Customer      @relation(fields: [customerId], references: [id])
+  status     InvoiceStatus @default(DRAFT)
+  issueDate  DateTime      @default(now())
+  dueDate    DateTime
+  notes      String?
+  items      InvoiceItem[]
+  payments   Payment[]
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  @@map("invoices")
+}
+
+model InvoiceItem {
+  id          String  @id @default(cuid())
+  invoiceId   String
+  invoice     Invoice @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  description String
+  quantity    Float
+  unitPrice   Float
+  taxRate     Float   @default(20)
+
+  @@map("invoice_items")
+}
+
+model Payment {
+  id        String        @id @default(cuid())
+  invoiceId String
+  invoice   Invoice       @relation(fields: [invoiceId], references: [id])
+  amount    Float
+  method    PaymentMethod @default(BANK_TRANSFER)
+  reference String?
+  date      DateTime      @default(now())
+  notes     String?
+  createdAt DateTime      @default(now())
+
+  @@map("payments")
+}
+
+model Expense {
+  id          String          @id @default(cuid())
+  title       String
+  amount      Float
+  category    ExpenseCategory
+  date        DateTime
+  description String?
+  receipt     String?
+  status      ExpenseStatus   @default(PENDING)
+  employeeId  String?
+  employee    Employee?       @relation(fields: [employeeId], references: [id])
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+
+  @@map("expenses")
+}
+
+// ─────────────────────────────────────────────
+// MODULE RH & PAIE
+// ─────────────────────────────────────────────
+
+model Department {
+  id          String     @id @default(cuid())
+  name        String     @unique
+  description String?
+  managerId   String?
+  employees   Employee[]
+  createdAt   DateTime   @default(now())
+
+  @@map("departments")
+}
+
+model Employee {
+  id           String         @id @default(cuid())
+  employeeId   String         @unique
+  firstName    String
+  lastName     String
+  email        String         @unique
+  phone        String?
+  position     String
+  departmentId String?
+  department   Department?    @relation(fields: [departmentId], references: [id])
+  salary       Float
+  hireDate     DateTime
+  birthDate    DateTime?
+  address      String?
+  status       EmployeeStatus @default(ACTIVE)
+  attendance   Attendance[]
+  leaves       Leave[]
+  payslips     Payslip[]
+  expenses     Expense[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@map("employees")
+}
+
+model Attendance {
+  id         String    @id @default(cuid())
+  employeeId String
+  employee   Employee  @relation(fields: [employeeId], references: [id])
+  date       DateTime  @db.Date
+  checkIn    DateTime?
+  checkOut   DateTime?
+  status     AttendanceStatus @default(PRESENT)
+  notes      String?
+
+  @@unique([employeeId, date])
+  @@map("attendance")
+}
+
+model Leave {
+  id         String      @id @default(cuid())
+  employeeId String
+  employee   Employee    @relation(fields: [employeeId], references: [id])
+  type       LeaveType
+  startDate  DateTime
+  endDate    DateTime
+  days       Int
+  reason     String?
+  status     LeaveStatus @default(PENDING)
+  approvedBy String?
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@map("leaves")
+}
+
+model Payslip {
+  id              String   @id @default(cuid())
+  employeeId      String
+  employee        Employee @relation(fields: [employeeId], references: [id])
+  month           Int
+  year            Int
+  baseSalary      Float
+  bonuses         Float    @default(0)
+  deductions      Float    @default(0)
+  netSalary       Float
+  status          PayslipStatus @default(DRAFT)
+  paidAt          DateTime?
+  createdAt       DateTime @default(now())
+
+  @@unique([employeeId, month, year])
+  @@map("payslips")
+}
+
+// ─────────────────────────────────────────────
+// MODULE STOCK & INVENTAIRE
+// ─────────────────────────────────────────────
+
+model Category {
+  id          String    @id @default(cuid())
+  name        String    @unique
+  description String?
+  products    Product[]
+  createdAt   DateTime  @default(now())
+
+  @@map("categories")
+}
+
+model Supplier {
+  id        String    @id @default(cuid())
+  name      String
+  email     String?
+  phone     String?
+  address   String?
+  taxNumber String?
+  status    SupplierStatus @default(ACTIVE)
+  products  ProductSupplier[]
+  purchases Purchase[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@map("suppliers")
+}
+
+model Product {
+  id           String            @id @default(cuid())
+  code         String            @unique
+  name         String
+  description  String?
+  categoryId   String?
+  category     Category?         @relation(fields: [categoryId], references: [id])
+  unit         String            @default("pcs")
+  costPrice    Float
+  salePrice    Float
+  stock        Float             @default(0)
+  minStock     Float             @default(0)
+  maxStock     Float?
+  location     String?
+  status       ProductStatus     @default(ACTIVE)
+  movements    StockMovement[]
+  orderItems   OrderItem[]
+  suppliers    ProductSupplier[]
+  purchaseItems PurchaseItem[]
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  @@map("products")
+}
+
+model ProductSupplier {
+  id           String   @id @default(cuid())
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id])
+  supplierId   String
+  supplier     Supplier @relation(fields: [supplierId], references: [id])
+  supplierCode String?
+  unitCost     Float
+
+  @@unique([productId, supplierId])
+  @@map("product_suppliers")
+}
+
+model StockMovement {
+  id          String       @id @default(cuid())
+  productId   String
+  product     Product      @relation(fields: [productId], references: [id])
+  type        MovementType
+  quantity    Float
+  unitCost    Float?
+  reference   String?
+  reason      String?
+  date        DateTime     @default(now())
+  createdBy   String?
+
+  @@map("stock_movements")
+}
+
+model Purchase {
+  id         String         @id @default(cuid())
+  number     String         @unique
+  supplierId String
+  supplier   Supplier       @relation(fields: [supplierId], references: [id])
+  status     PurchaseStatus @default(DRAFT)
+  orderDate  DateTime       @default(now())
+  receiveDate DateTime?
+  notes      String?
+  items      PurchaseItem[]
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  @@map("purchases")
+}
+
+model PurchaseItem {
+  id          String   @id @default(cuid())
+  purchaseId  String
+  purchase    Purchase @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
+  quantity    Float
+  unitCost    Float
+  received    Float    @default(0)
+
+  @@map("purchase_items")
+}
+
+// ─────────────────────────────────────────────
+// ENUMS
+// ─────────────────────────────────────────────
+
+enum CustomerStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum QuoteStatus {
+  DRAFT
+  SENT
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum InvoiceStatus {
+  DRAFT
+  SENT
+  PARTIAL
+  PAID
+  OVERDUE
+  CANCELLED
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  CHECK
+  CREDIT_CARD
+  OTHER
+}
+
+enum ExpenseCategory {
+  TRAVEL
+  OFFICE
+  UTILITIES
+  MARKETING
+  EQUIPMENT
+  SERVICES
+  OTHER
+}
+
+enum ExpenseStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  PAID
+}
+
+enum EmployeeStatus {
+  ACTIVE
+  INACTIVE
+  ON_LEAVE
+  TERMINATED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  LATE
+  HALF_DAY
+  HOLIDAY
+}
+
+enum LeaveType {
+  ANNUAL
+  SICK
+  MATERNITY
+  PATERNITY
+  UNPAID
+  OTHER
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum PayslipStatus {
+  DRAFT
+  VALIDATED
+  PAID
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+  DISCONTINUED
+}
+
+enum MovementType {
+  IN
+  OUT
+  ADJUSTMENT
+  TRANSFER
+  RETURN
+}
+
+enum SupplierStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum PurchaseStatus {
+  DRAFT
+  ORDERED
+  PARTIAL
+  RECEIVED
+  CANCELLED
+}

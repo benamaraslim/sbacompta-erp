@@ -197,6 +197,6 @@ npm run db:studio     # Ouvrir Prisma Studio (interface visuelle DB)
 
 <div align="center">
 
-Développé avec ❤️ — **SBACOMPTA v1.0**
+**SBACOMPTA v1.0**
 
 </div>
